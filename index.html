@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ullswater Corp - Master Operations 2026</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; margin: 0; padding: 20px; }
+        .nav-header { max-width: 1200px; margin: 0 auto 10px auto; display: flex; gap: 5px; }
+        .nav-btn { padding: 12px 20px; border: none; border-radius: 8px 8px 0 0; cursor: pointer; background: #95a5a6; color: white; font-weight: bold; }
+        .nav-btn.active { background: #2c3e50; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .container { max-width: 1200px; margin: auto; background: white; padding: 30px; border-radius: 0 10px 10px 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .config-box { background: #f8f9fa; padding: 20px; margin-bottom: 25px; border-left: 5px solid #2c3e50; display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { background: #2c3e50; color: white; padding: 10px; font-size: 12px; }
+        td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        input, select, textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .controls { display: flex; justify-content: center; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+        button { padding: 10px 20px; cursor: pointer; border: none; border-radius: 5px; color: white; font-weight: bold; }
+        .p-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+        .section-title { grid-column: span 4; font-weight: bold; border-bottom: 2px solid #eee; margin-top: 10px; padding-bottom: 5px; color: #2c3e50; }
+        
+        .logistics-header { grid-column: span 4; display: grid; grid-template-columns: 2fr 1fr 1.2fr 2.5fr; gap: 5px; font-weight: bold; font-size: 11px; color: #7f8c8d; padding: 5px 0; }
+        .logistics-row { grid-column: span 4; display: grid; grid-template-columns: 2fr 1fr 1.2fr 2.5fr; gap: 5px; align-items: center; }
+
+        @media print {
+            .nav-header, .controls, .config-box, button, .no-print { display: none !important; }
+            body { background: white; padding: 0; }
+            .container { box-shadow: none; border: none; width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="nav-header">
+    <button class="nav-btn active" onclick="showTab(event, 'ts_view')">TIMESHEET DATA ENTRY</button>
+    <button class="nav-btn" onclick="showTab(event, 'p_view')">PAYROLL & LEDGER</button>
+</div>
+
+<div id="ts_view" class="tab-content active">
+    <div class="container">
+        <h2>Timesheet Data Entry (2026)</h2>
+        <div class="config-box">
+            <div>Period:<br><input type="text" id="optPeriod" onchange="saveTSConfig()"></div>
+            <div>Names (CSV):<br><input type="text" id="optName" onchange="saveTSConfig()"></div>
+            <div>Task IDs (CSV):<br><input type="text" id="optTask" onchange="saveTSConfig()"></div>
+            <div>Hour Types (CSV):<br><input type="text" id="optVar" onchange="saveTSConfig()"></div>
+        </div>
+        <table id="masterTable">
+            <thead>
+                <tr><th>Period</th><th>Date</th><th>Employee</th><th>Task</th><th>Type</th><th>In</th><th>Out</th><th>Break</th><th>Total</th><th>Action</th></tr>
+            </thead>
+            <tbody id="tsTableBody"></tbody>
+        </table>
+        <div class="controls">
+            <button style="background:#27ae60" onclick="addRow()">+ Add Row</button>
+            <button style="background:#2c3e50" onclick="saveTSJSON()">SAVE DB (JSON)</button>
+            <button style="background:#8e44ad" onclick="document.getElementById('tsJsonInput').click()">LOAD DB (JSON)</button>
+            <input type="file" id="tsJsonInput" style="display:none" accept=".json" onchange="loadTSJSON(event)">
+            <button style="background:#f39c12" onclick="exportTSCSV()">Export CSV</button>
+            <button style="background:#e67e22" onclick="document.getElementById('tsCsvInput').click()">Load CSV</button>
+            <input type="file" id="tsCsvInput" style="display:none" accept=".csv" onchange="loadTSCSV(event)">
+            <button style="background:#8e44ad;" onclick="pushToPayroll()">PUSH TO PAYROLL →</button>
+            <button style="background:#c0392b" onclick="clearTS()">Clear All</button>
+        </div>
+        <div style="margin-top: 40px; background: #f8f9fa; padding: 20px; border-radius: 8px;">
+            <h3>Hours Summary (By Period)</h3>
+            <table id="summaryTable"><thead id="sumHead"></thead><tbody id="sumBody"></tbody></table>
+        </div>
+    </div>
+</div>
+
+<div id="p_view" class="tab-content">
+    <div class="container">
+        <div style="text-align: center; margin-bottom: 20px;">
+            <h1 style="margin:0;">ULLSWATER CORPORATION</h1>
+            <small>Payroll & Contracted Services Management</small>
+        </div>
+
+        <div class="p-grid">
+            <div class="section-title">Database & Setup</div>
+            <textarea id="pEmpList" placeholder="Names (comma sep)" oninput="savePConfig()"></textarea>
+            <textarea id="pRateList" placeholder="Rates (comma sep)" oninput="savePConfig()"></textarea>
+            
+            <div style="grid-column: span 2; display: flex; gap: 5px;">
+                <button style="background:#2c3e50; flex:1;" onclick="savePayrollJSON()">SAVE BACKUP (JSON)</button>
+                <button style="background:#8e44ad; flex:1;" onclick="document.getElementById('pJsonInput').click()">LOAD BACKUP (JSON)</button>
+                <input type="file" id="pJsonInput" style="display:none" accept=".json" onchange="loadPayrollJSON(event)">
+            </div>
+            <div style="grid-column: span 2; display: flex; gap: 5px;">
+                <button style="background:#f39c12; flex:1;" onclick="exportPayrollCSV()">EXPORT CSV</button>
+                <button style="background:#e67e22; flex:1;" onclick="document.getElementById('pCsvInput').click()">IMPORT CSV</button>
+                <input type="file" id="pCsvInput" style="display:none" accept=".csv" onchange="loadPayrollCSV(event)">
+            </div>
+
+            <button style="background:#c0392b" onclick="clearPLedger()">Clear Ledger</button>
+            <button style="background:#e67e22" onclick="clearPForm()">Clear Form</button>
+
+            <div class="section-title">Personnel & Earnings</div>
+            <input type="date" id="pFrom">
+            <input type="date" id="pTo">
+            <select id="pName"></select>
+            <select id="pType">
+                <option value="regular">Regular Employee</option>
+                <option value="piece">Contracted (Piece Rate)</option>
+            </select>
+
+            <select id="pRate"></select>
+            <input type="number" id="hReg" placeholder="Reg Hrs">
+            <input type="number" id="hOt" placeholder="OT (1.25x)">
+            <input type="number" id="hRd" placeholder="Rest Day (1.30x)">
+            <input type="number" id="hSh" placeholder="Spec Hol (1.30x)">
+            <input type="number" id="hLh" placeholder="Legal Hol (2x)">
+
+            <div class="section-title">Logistics Categories (Itemized)</div>
+            <div class="logistics-header">
+                <span>Category Name</span>
+                <span>Qty</span>
+                <span>Rate</span>
+                <span>Internal Notes</span>
+            </div>
+            <div class="logistics-row"><input type="text" id="catN1" value="Hauled Items"><input type="number" id="catQ1" placeholder="Qty"><input type="number" id="catR1" placeholder="Rate"><input type="text" id="catM1" placeholder="Notes"></div>
+            <div class="logistics-row"><input type="text" id="catN2" value="Loading Services"><input type="number" id="catQ2" placeholder="Qty"><input type="number" id="catR2" placeholder="Rate"><input type="text" id="catM2" placeholder="Notes"></div>
+            <div class="logistics-row"><input type="text" id="catN3" value="Receiving/Stock"><input type="number" id="catQ3" placeholder="Qty"><input type="number" id="catR3" placeholder="Rate"><input type="text" id="catM3" placeholder="Notes"></div>
+            <div class="logistics-row"><input type="text" id="catN4" value="Equipment Rental"><input type="number" id="catQ4" placeholder="Qty"><input type="number" id="catR4" placeholder="Rate"><input type="text" id="catM4" placeholder="Notes"></div>
+            <div class="logistics-row"><input type="text" id="catN5" value="Category 5"><input type="number" id="catQ5" placeholder="Qty"><input type="number" id="catR5" placeholder="Rate"><input type="text" id="catM5" placeholder="Notes"></div>
+            <div class="logistics-row"><input type="text" id="catN6" value="Category 6"><input type="number" id="catQ6" placeholder="Qty"><input type="number" id="catR6" placeholder="Rate"><input type="text" id="catM6" placeholder="Notes"></div>
+            <div class="logistics-row"><input type="text" id="catN7" value="Category 7"><input type="number" id="catQ7" placeholder="Qty"><input type="number" id="catR7" placeholder="Rate"><input type="text" id="catM7" placeholder="Notes"></div>
+            <div class="logistics-row"><input type="text" id="catN8" value="Category 8"><input type="number" id="catQ8" placeholder="Qty"><input type="number" id="catR8" placeholder="Rate"><input type="text" id="catM8" placeholder="Notes"></div>
+            <div class="logistics-row"><input type="text" id="catN9" value="Category 9"><input type="number" id="catQ9" placeholder="Qty"><input type="number" id="catR9" placeholder="Rate"><input type="text" id="catM9" placeholder="Notes"></div>
+            <div class="logistics-row"><input type="text" id="catN10" value="Category 10"><input type="number" id="catQ10" placeholder="Qty"><input type="number" id="catR10" placeholder="Rate"><input type="text" id="catM10" placeholder="Notes"></div>
+
+            <div class="section-title">Itemized Additional Deductions</div>
+            <div class="logistics-header">
+                <span>Deduction Category</span>
+                <span>Qty</span>
+                <span>Rate</span>
+                <span>Internal Notes</span>
+            </div>
+            <div class="logistics-row"><input type="text" id="dCatN1" value="Uniform/Equip"><input type="number" id="dCatQ1" placeholder="Qty"><input type="number" id="dCatR1" placeholder="Rate"><input type="text" id="dCatM1" placeholder="Notes"></div>
+            <div class="logistics-row"><input type="text" id="dCatN2" value="Insurance/HMO"><input type="number" id="dCatQ2" placeholder="Qty"><input type="number" id="dCatR2" placeholder="Rate"><input type="text" id="dCatM2" placeholder="Notes"></div>
+            <div class="logistics-row"><input type="text" id="dCatN3" value="Tax (WHT)"><input type="number" id="dCatQ3" placeholder="Qty"><input type="number" id="dCatR3" placeholder="Rate"><input type="text" id="dCatM3" placeholder="Notes"></div>
+            <div class="logistics-row"><input type="text" id="dCatN4" value="Union/Assoc"><input type="number" id="dCatQ4" placeholder="Qty"><input type="number" id="dCatR4" placeholder="Rate"><input type="text" id="dCatM4" placeholder="Notes"></div>
+            <div class="logistics-row"><input type="text" id="dCatN5" value="Misc Deduct"><input type="number" id="dCatQ5" placeholder="Qty"><input type="number" id="dCatR5" placeholder="Rate"><input type="text" id="dCatM5" placeholder="Notes"></div>
+            <div class="logistics-row"><input type="text" id="dCatN6" value="Deduction 6"><input type="number" id="dCatQ6" placeholder="Qty"><input type="number" id="dCatR6" placeholder="Rate"><input type="text" id="dCatM6" placeholder="Notes"></div>
+            <div class="logistics-row"><input type="text" id="dCatN7" value="Deduction 7"><input type="number" id="dCatQ7" placeholder="Qty"><input type="number" id="dCatR7" placeholder="Rate"><input type="text" id="dCatM7" placeholder="Notes"></div>
+            <div class="logistics-row"><input type="text" id="dCatN8" value="Deduction 8"><input type="number" id="dCatQ8" placeholder="Qty"><input type="number" id="dCatR8" placeholder="Rate"><input type="text" id="dCatM8" placeholder="Notes"></div>
+            <div class="logistics-row"><input type="text" id="dCatN9" value="Deduction 9"><input type="number" id="dCatQ9" placeholder="Qty"><input type="number" id="dCatR9" placeholder="Rate"><input type="text" id="dCatM9" placeholder="Notes"></div>
+            <div class="logistics-row"><input type="text" id="dCatN10" value="Deduction 10"><input type="number" id="dCatQ10" placeholder="Qty"><input type="number" id="dCatR10" placeholder="Rate"><input type="text" id="dCatM10" placeholder="Notes"></div>
+
+            <div class="section-title">Adjustments & Finalize</div>
+            <input type="number" id="pAdj" placeholder="Other Adj">
+            <input type="number" id="pAdv" placeholder="Cash Advance">
+            <textarea id="pNotes" style="grid-column: span 2; height: 40px;" placeholder="General Payroll Notes"></textarea>
+            <button style="background:#27ae60; grid-column: span 4;" onclick="addPayrollRecord()">ADD TO LEDGER</button>
+        </div>
+
+        <table>
+            <thead><tr><th>Period Coverage</th><th>Name</th><th>Classification</th><th>Gross</th><th>Net</th><th>Action</th></tr></thead>
+            <tbody id="pLedgerBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    let tsRows = [];
+    let pRecords = [];
+    const defaultVars = "Regular, Overtime, Rest Day, Special Holiday, Legal Holiday";
+
+    function showTab(evt, tabId) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        evt.currentTarget.classList.add('active');
+    }
+
+    // --- TIMESHEET LOGIC ---
+    function saveTSConfig() {
+        ['optPeriod','optName','optTask','optVar'].forEach(id => localStorage.setItem('ts_'+id, document.getElementById(id).value));
+        updateTSSelectors();
+    }
+    
+    function saveTSData() {
+        localStorage.setItem('ts_activeRows', JSON.stringify(tsRows));
+        tsRows.forEach(id => {
+            ['p','d','n','t','v','ti','to','b','tot'].forEach(f => {
+                const el = document.getElementById('ts'+f+id);
+                if(el) localStorage.setItem('ts_'+f+id, el.value);
+            });
+        });
+    }
+
+    function createTSRow(id) {
+        const tr = document.createElement('tr');
+        tr.id = `ts_row_${id}`;
+        tr.innerHTML = `
+            <td><select id="tsp${id}" onchange="saveTSData(); runTSSummary()"></select></td>
+            <td><input type="date" id="tsd${id}" onchange="saveTSData()"></td>
+            <td><select id="tsn${id}" onchange="saveTSData(); runTSSummary()"></select></td>
+            <td><select id="tst${id}" onchange="saveTSData()"></select></td>
+            <td><select id="tsv${id}" onchange="saveTSData(); runTSSummary()"></select></td>
+            <td><input type="time" id="tsti${id}" onchange="calcTSRow(${id})"></td>
+            <td><input type="time" id="tsto${id}" onchange="calcTSRow(${id})"></td>
+            <td><input type="number" id="tsb${id}" onchange="calcTSRow(${id})"></td>
+            <td><input type="text" id="tstot${id}" disabled value="0.00"></td>
+            <td><button onclick="removeTSRow(${id})" style="color:red; background:none; border:none; cursor:pointer;">✖</button></td>`;
+        document.getElementById('tsTableBody').appendChild(tr);
+        if(!tsRows.includes(id)) tsRows.push(id);
+    }
+
+    function updateTSSelectors() {
+        const p = document.getElementById('optPeriod').value.split(',').map(s=>s.trim());
+        const n = document.getElementById('optName').value.split(',').map(s=>s.trim());
+        const t = document.getElementById('optTask').value.split(',').map(s=>s.trim());
+        const v = (document.getElementById('optVar').value || defaultVars).split(',').map(s=>s.trim());
+        tsRows.forEach(id => {
+            fillSel('tsp'+id, p); fillSel('tsn'+id, n); fillSel('tst'+id, t); fillSel('tsv'+id, v);
+        });
+        runTSSummary();
+    }
+
+    function fillSel(id, list) {
+        const el = document.getElementById(id); if(!el) return;
+        const cur = el.value;
+        el.innerHTML = list.map(i => `<option value="${i}">${i}</option>`).join('');
+        if(list.includes(cur)) el.value = cur;
+    }
+
+    function calcTSRow(id) {
+        const ti = document.getElementById(`tsti${id}`).value, to = document.getElementById(`tsto${id}`).value;
+        const b = parseFloat(document.getElementById(`tsb${id}`).value) || 0;
+        if(ti && to) {
+            const start = new Date("1970-01-01T"+ti+"Z"), end = new Date("1970-01-01T"+to+"Z");
+            let diff = (end - start) / 1000 / 60;
+            if(diff < 0) diff += 1440;
+            document.getElementById(`tstot${id}`).value = ((diff - b)/60).toFixed(2);
+        }
+        saveTSData(); 
+        runTSSummary();
+    }
+
+    function runTSSummary() {
+        const vList = (document.getElementById('optVar').value || defaultVars).split(',').map(s=>s.trim()).filter(s=>s);
+        let sum = {};
+        document.getElementById('sumHead').innerHTML = `<tr><th>Period</th><th>Name</th>${vList.map(v => `<th>${v}</th>`).join('')}<th>Total</th></tr>`;
+        tsRows.forEach(id => {
+            const p = document.getElementById(`tsp${id}`).value, n = document.getElementById(`tsn${id}`).value, v = document.getElementById(`tsv${id}`).value, h = parseFloat(document.getElementById(`tstot${id}`).value) || 0;
+            const key = `${p} | ${n}`;
+            if(!sum[key]) { sum[key] = { period: p, name: n }; vList.forEach(x => sum[key][x] = 0); }
+            if(sum[key].hasOwnProperty(v)) sum[key][v] += h;
+        });
+        let html = "";
+        Object.keys(sum).sort().forEach(key => {
+            let rowTot = 0;
+            const entry = sum[key];
+            let cells = vList.map(v => { rowTot += entry[v]; return `<td>${entry[v].toFixed(2)}</td>`}).join('');
+            html += `<tr><td>${entry.period}</td><td><b>${entry.name}</b></td>${cells}<td><b>${rowTot.toFixed(2)}</b></td></tr>`;
+        });
+        document.getElementById('sumBody').innerHTML = html;
+    }
+
+    function addRow() { const id = tsRows.length ? Math.max(...tsRows)+1 : 1; createTSRow(id); updateTSSelectors(); saveTSData(); }
+    
+    function removeTSRow(id) { 
+        document.getElementById('ts_row_'+id).remove(); 
+        tsRows = tsRows.filter(i => i !== id); 
+        ['p','d','n','t','v','ti','to','b','tot'].forEach(f => localStorage.removeItem('ts_'+f+id));
+        saveTSData(); 
+        runTSSummary(); 
+    }
+
+    function clearTS() { if(confirm("This will wipe all locally saved data. Proceed?")) { localStorage.clear(); location.reload(); } }
+
+    // --- PAYROLL LOGIC ---
+    function savePConfig() {
+        localStorage.setItem('p_emps', document.getElementById('pEmpList').value);
+        localStorage.setItem('p_rates', document.getElementById('pRateList').value);
+        updatePDropdowns();
+    }
+
+    function updatePDropdowns() {
+        const e = document.getElementById('pEmpList').value.split(',').filter(s=>s.trim());
+        const r = document.getElementById('pRateList').value.split(',').filter(s=>s.trim());
+        document.getElementById('pName').innerHTML = e.map(x => `<option value="${x.trim()}">${x.trim()}</option>`).join('');
+        document.getElementById('pRate').innerHTML = r.map(x => `<option value="${x.trim()}">${x.trim()}</option>`).join('');
+    }
+
+    function addPayrollRecord() {
+        const rate = parseFloat(document.getElementById('pRate').value) || 0;
+        const type = document.getElementById('pType').value;
+        const hR = parseFloat(document.getElementById('hReg').value)||0, hO = parseFloat(document.getElementById('hOt').value)||0;
+        const hRD = parseFloat(document.getElementById('hRd').value)||0, hS = parseFloat(document.getElementById('hSh').value)||0, hL = parseFloat(document.getElementById('hLh').value)||0;
+        
+        const hourly = (hR * rate) + (hO * rate * 1.25) + (hRD * rate * 1.30) + (hS * rate * 1.30) + (hL * rate * 2.00);
+        
+        let logisticsData = [];
+        let logTotal = 0;
+        for(let i=1; i<=10; i++) {
+            const name = document.getElementById(`catN${i}`).value;
+            const qty = parseFloat(document.getElementById(`catQ${i}`).value) || 0;
+            const amt = parseFloat(document.getElementById(`catR${i}`).value) || 0;
+            const note = document.getElementById(`catM${i}`).value;
+            const subtotal = qty * amt;
+            if(subtotal > 0) {
+                logisticsData.push({ name, qty, amt, subtotal, note });
+                logTotal += subtotal;
+            }
+        }
+
+        let dedData = [];
+        let dedTotal = 0;
+        for(let i=1; i<=10; i++) {
+            const name = document.getElementById(`dCatN${i}`).value;
+            const qty = parseFloat(document.getElementById(`dCatQ${i}`).value) || 0;
+            const amt = parseFloat(document.getElementById(`dCatR${i}`).value) || 0;
+            const note = document.getElementById(`dCatM${i}`).value;
+            const subtotal = qty * amt;
+            if(subtotal > 0) {
+                dedData.push({ name, qty, amt, subtotal, note });
+                dedTotal += subtotal;
+            }
+        }
+
+        const adj = parseFloat(document.getElementById('pAdj').value)||0;
+        const gross = hourly + logTotal + adj;
+        
+        let eeS=0, erS=0, eePH=0, erPH=0, eePI=0, erPI=0, a13=0;
+        if(type === 'regular') {
+            const msc = Math.min(Math.max(gross, 5000), 35000);
+            eeS = msc * 0.05; erS = msc * 0.10;
+            const phB = Math.min(Math.max(gross, 10000), 100000);
+            eePH = (phB * 0.05) * 0.5; erPH = eePH;
+            const piB = Math.min(gross, 10000);
+            eePI = piB * 0.02; erPI = eePI;
+            a13 = gross / 12;
+        }
+        const adv = parseFloat(document.getElementById('pAdv').value)||0;
+        const net = gross - (eeS + eePH + eePI + adv + dedTotal);
+        
+        pRecords.push({
+            name: document.getElementById('pName').value, type, from: document.getElementById('pFrom').value, to: document.getElementById('pTo').value,
+            gross, net, eeS, erS, eePH, erPH, eePI, erPI, a13, hourly, logistics: logisticsData, extraDeductions: dedData, adj, adv, notes: document.getElementById('pNotes').value,
+            hrs: {hR, hO, hRD, hS, hL}, rate
+        });
+        localStorage.setItem('p_records', JSON.stringify(pRecords)); renderPLedger(); clearPForm();
+    }
+
+    function renderPLedger() {
+        document.getElementById('pLedgerBody').innerHTML = pRecords.map((r, i) => `
+            <tr>
+                <td style="font-size:11px;">${r.from} to ${r.to}</td>
+                <td>${r.name}</td>
+                <td>${r.type.toUpperCase()}</td>
+                <td>${r.gross.toFixed(2)}</td>
+                <td><b>${r.net.toFixed(2)}</b></td>
+                <td>
+                    <button style="background:#2980b9" onclick="printDetailedPayslip(${i})">Print Detail</button> 
+                    <button style="background:#c0392b" onclick="delP(${i})">X</button>
+                </td>
+            </tr>`).join('');
+    }
+
+    function printDetailedPayslip(i) {
+        const r = pRecords[i];
+        const isPiece = r.type === 'piece';
+        const win = window.open('', '_blank');
+        
+        // Itemized Logistics with Notes
+        let logisticsHtml = r.logistics.map(l => `
+            <tr>
+                <td><b>Logistics:</b> ${l.name}<br>
+                    <small style="color:#555;">(Qty: ${l.qty} x Rate: ${l.amt}) | Note: ${l.note || 'N/A'}</small>
+                </td>
+                <td align="right" valign="top">₱${l.subtotal.toFixed(2)}</td>
+            </tr>`).join('');
+
+        // Itemized Deductions with Notes
+        let dedHtml = r.extraDeductions.map(d => `
+            <tr>
+                <td><b>Ded:</b> ${d.name}<br>
+                    <small style="color:#555;">(Qty: ${d.qty} x Rate: ${d.amt}) | Note: ${d.note || 'N/A'}</small>
+                </td>
+                <td align="right" valign="top">-₱${d.subtotal.toFixed(2)}</td>
+            </tr>`).join('');
+        
+        win.document.write(`
+            <html><head><style>
+                body{font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding:30px; font-size:12px; line-height:1.4;} 
+                .letterhead{text-align:center; border-bottom:2px solid #2c3e50; margin-bottom:20px; padding-bottom:10px;}
+                .box{border:1px solid #ccc; padding:15px; margin-bottom:15px; background:#fafafa;}
+                table{width:100%; border-collapse:collapse; margin:10px 0;}
+                th{text-align:left; border-bottom:1px solid #eee; padding:5px;}
+                td{padding:8px 5px; border-bottom:1px solid #f0f0f0;}
+                .total{font-weight:bold; background:#eee; font-size:14px;}
+                .calc-sub { font-size: 11px; background: #fff; padding: 10px; border: 1px dashed #ccc; }
+                .cut-line{border-top:2px dashed #000; margin:40px 0; position:relative; text-align:center;}
+                .cut-line:after{content:'✂--- CONFIDENTIAL OFFICE COPY ---✂'; position:absolute; top:-10px; background:#fff; padding:0 10px; left:50%; transform:translateX(-50%); font-size:10px; font-weight:bold;}
+                .admin-section{background:#eef2f3; padding:20px; border:1px solid #bdc3c7; border-radius:5px;}
+                @media print { .no-print { display: none; } body { padding:0; } }
+            </style></head><body>
+                <div class="letterhead">
+                    <h1 style="margin:0; color:#2c3e50;">ULLSWATER CORPORATION</h1>
+                    <h3 style="margin:5px 0; color:#7f8c8d;">TRANSPARENT PAYROLL SETTLEMENT</h3>
+                    <p><b>Coverage:</b> ${r.from} to ${r.to}</p>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                    <span><b>PERSONNEL:</b> ${r.name}</span>
+                    <span><b>CLASSIFICATION:</b> ${r.type.toUpperCase()}</span>
+                </div>
+
+                <div class="box">
+                    <b style="font-size:14px; color:#2980b9;">1. EARNINGS & COMPUTATIONS</b>
+                    <table>
+                        <thead><tr><th>Description & Detailed Computation</th><th align="right">Amount</th></tr></thead>
+                        <tr>
+                            <td>
+                                <b>Timekeeping (Hours-Based)</b><br>
+                                <div class="calc-sub">
+                                    Base Rate: ₱${r.rate.toFixed(2)}/hr<br>
+                                    • Regular: ${r.hrs.hR} hrs × 1.0 = ₱${(r.hrs.hR * r.rate).toFixed(2)}<br>
+                                    • Overtime: ${r.hrs.hO} hrs × 1.25 = ₱${(r.hrs.hO * r.rate * 1.25).toFixed(2)}<br>
+                                    • Rest Day: ${r.hrs.hRD} hrs × 1.30 = ₱${(r.hrs.hRD * r.rate * 1.30).toFixed(2)}<br>
+                                    • Special Holiday: ${r.hrs.hS} hrs × 1.30 = ₱${(r.hrs.hS * r.rate * 1.30).toFixed(2)}<br>
+                                    • Legal Holiday: ${r.hrs.hL} hrs × 2.0 = ₱${(r.hrs.hL * r.rate * 2.0).toFixed(2)}
+                                </div>
+                            </td>
+                            <td align="right" valign="top">₱${r.hourly.toFixed(2)}</td>
+                        </tr>
+                        ${logisticsHtml}
+                        <tr>
+                            <td><b>Other Adjustments / Incentives</b></td>
+                            <td align="right">₱${r.adj.toFixed(2)}</td>
+                        </tr>
+                        <tr class="total">
+                            <td>TOTAL GROSS EARNINGS</td>
+                            <td align="right">₱${r.gross.toFixed(2)}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div class="box">
+                    <b style="font-size:14px; color:#c0392b;">2. DEDUCTIONS & CASH ADVANCES</b>
+                    <table>
+                        <thead><tr><th>Description</th><th align="right">Amount</th></tr></thead>
+                        ${!isPiece ? `
+                        <tr><td>Statutory: SSS Premium (Employee Share)</td><td align="right">-₱${r.eeS.toFixed(2)}</td></tr>
+                        <tr><td>Statutory: PhilHealth (Employee Share)</td><td align="right">-₱${r.eePH.toFixed(2)}</td></tr>
+                        <tr><td>Statutory: Pag-IBIG (Employee Share)</td><td align="right">-₱${r.eePI.toFixed(2)}</td></tr>
+                        ` : '<tr><td colspan="2"><small><i>Piece-rate: No statutory deductions applied.</i></small></td></tr>'}
+                        <tr><td>Cash Advance Settlements</td><td align="right">-₱${r.adv.toFixed(2)}</td></tr>
+                        ${dedHtml}
+                        <tr class="total">
+                            <td>NET TAKE-HOME PAY</td>
+                            <td align="right">₱${r.net.toFixed(2)}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div class="box" style="background:#fff7e6; border: 1px solid #ffe58f;">
+                    <b>GENERAL DISCLOSURE / PAYROLL NOTES:</b><br>
+                    <p style="margin:5px 0;">${r.notes || "No additional notes for this period."}</p>
+                </div>
+
+                <div style="margin-top:40px; display:flex; justify-content:space-around; text-align:center;">
+                    <div style="width:200px; border-top:1px solid #000; padding-top:5px;">Approved By</div>
+                    <div style="width:200px; border-top:1px solid #000; padding-top:5px;">Employee Signature</div>
+                </div>
+
+                <div class="cut-line"></div>
+
+                <div class="admin-section">
+                    <h4 style="margin:0 0 10px 0;">EMPLOYER FINANCIAL SUMMARY (INTERNAL)</h4>
+                    <table>
+                        <tr><td>Direct Compensation (Gross):</td><td align="right">₱${r.gross.toFixed(2)}</td></tr>
+                        ${!isPiece ? `
+                        <tr><td>Employer SSS Contribution:</td><td align="right">₱${r.erS.toFixed(2)}</td></tr>
+                        <tr><td>Employer PhilHealth Share:</td><td align="right">₱${r.erPH.toFixed(2)}</td></tr>
+                        <tr><td>Employer Pag-IBIG Share:</td><td align="right">₱${r.erPI.toFixed(2)}</td></tr>
+                        <tr><td><b>13th Month Accrual (Reserve):</b></td><td align="right"><b>₱${r.a13.toFixed(2)}</b></td></tr>
+                        <tr class="total"><td>TOTAL COMPANY COST (TCC):</td><td align="right">₱${(r.gross + r.erS + r.erPH + r.erPI + r.a13).toFixed(2)}</td></tr>
+                        ` : '<tr><td colspan="2">N/A: Standard Contractor Pricing.</td></tr>'}
+                    </table>
+                </div>
+
+                <div style="margin-top:20px;" class="no-print">
+                    <button onclick="window.print()" style="padding:10px 25px; background:#2c3e50; color:white; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">PRINT THIS DOCUMENT</button>
+                    <button onclick="window.close()" style="padding:10px 25px; background:#95a5a6; color:white; border:none; border-radius:5px; cursor:pointer; margin-left:10px;">CLOSE PREVIEW</button>
+                </div>
+            </body></html>`);
+        win.document.close();
+    }
+
+    // --- JSON/CSV HANDLERS ---
+    function savePayrollJSON() {
+        const data = { config: { emps: document.getElementById('pEmpList').value, rates: document.getElementById('pRateList').value }, records: pRecords };
+        download(JSON.stringify(data), "Ullswater_Payroll_Backup.json", "application/json");
+    }
+    function loadPayrollJSON(e) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                const data = JSON.parse(ev.target.result);
+                if (data.config) { 
+                    document.getElementById('pEmpList').value = data.config.emps; 
+                    document.getElementById('pRateList').value = data.config.rates; 
+                    savePConfig(); 
+                }
+                pRecords = data.records || []; 
+                localStorage.setItem('p_records', JSON.stringify(pRecords));
+                renderPLedger();
+                alert("Payroll Ledger backup loaded successfully.");
+            } catch (err) { alert("Error loading backup: " + err); }
+        };
+        reader.readAsText(e.target.files[0]);
+    }
+    function exportPayrollCSV() {
+        let csv = "From,To,Name,Type,Gross,Net,SSS_EE,SSS_ER,PH_EE,PH_ER,PI_EE,PI_ER,13thAccrual,CashAdvance,Notes\n";
+        pRecords.forEach(r => { csv += `"${r.from}","${r.to}","${r.name}","${r.type}",${r.gross},${r.net},${r.eeS},${r.erS},${r.eePH},${r.erPH},${r.eePI},${r.erPI},${r.a13},${r.adv},"${r.notes}"\n`; });
+        download(csv, "Ullswater_Payroll_Ledger.csv", "text/csv");
+    }
+    function loadPayrollCSV(e) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const lines = ev.target.result.split('\n').filter(l => l.trim() !== '');
+            pRecords = []; 
+            for(let i = 1; i < lines.length; i++) {
+                const c = lines[i].split(',').map(v => v.replace(/"/g, ''));
+                pRecords.push({ from: c[0], to: c[1], name: c[2], type: c[3], gross: parseFloat(c[4]), net: parseFloat(c[5]), eeS: parseFloat(c[6]), erS: parseFloat(c[7]), eePH: parseFloat(c[8]), erPH: parseFloat(c[9]), eePI: parseFloat(c[10]), erPI: parseFloat(c[11]), a13: parseFloat(c[12]), adv: parseFloat(c[13]), notes: c[14] || "", hrs: {hR:0, hO:0, hRD:0, hS:0, hL:0}, rate: 0, logistics:[], extraDeductions:[] });
+            }
+            localStorage.setItem('p_records', JSON.stringify(pRecords));
+            renderPLedger();
+        };
+        reader.readAsText(e.target.files[0]);
+    }
+
+    // --- SHARED UTILS ---
+    function saveTSJSON() {
+        const d = { 
+            config: { 
+                p: document.getElementById('optPeriod').value, 
+                n: document.getElementById('optName').value, 
+                t: document.getElementById('optTask').value, 
+                v: document.getElementById('optVar').value 
+            }, 
+            rows: {}, 
+            active: tsRows 
+        };
+        tsRows.forEach(id => { 
+            d.rows[id] = {}; 
+            ['p','d','n','t','v','ti','to','b','tot'].forEach(f => {
+                const el = document.getElementById('ts'+f+id);
+                d.rows[id][f] = el ? el.value : "";
+            }); 
+        });
+        download(JSON.stringify(d), "Ullswater_Timesheet_Database.json", "application/json");
+    }
+    function loadTSJSON(e) {
+        const r = new FileReader(); r.onload = (ev) => {
+            const d = JSON.parse(ev.target.result);
+            document.getElementById('optPeriod').value = d.config.p; 
+            document.getElementById('optName').value = d.config.n;
+            document.getElementById('optTask').value = d.config.t; 
+            document.getElementById('optVar').value = d.config.v;
+            document.getElementById('tsTableBody').innerHTML = ""; 
+            tsRows = [];
+            d.active.forEach(id => { 
+                createTSRow(id); 
+                updateTSSelectors();
+                ['p','d','n','t','v','ti','to','b','tot'].forEach(f => {
+                    const el = document.getElementById('ts'+f+id);
+                    if(el) el.value = d.rows[id][f];
+                }); 
+            });
+            runTSSummary();
+            saveTSData(); 
+        }; r.readAsText(e.target.files[0]);
+    }
+    function exportTSCSV() {
+        let csv = "Period,Date,Employee,Task,Type,In,Out,Break,Total\n";
+        tsRows.forEach(id => { csv += ['p','d','n','t','v','ti','to','b','tot'].map(f => `"${document.getElementById('ts'+f+id).value}"`).join(',') + "\n"; });
+        download(csv, "Ullswater_Timesheets.csv", "text/csv");
+    }
+
+    // MIRROR-UPDATE LOGIC
+    function loadTSCSV(e) {
+        const r = new FileReader(); 
+        r.onload = (ev) => {
+            const lines = ev.target.result.split('\n').filter(l => l.trim() !== '');
+            
+            // 1. CLEAR CURRENT STATE
+            document.getElementById('tsTableBody').innerHTML = ""; 
+            tsRows.forEach(id => {
+                ['p','d','n','t','v','ti','to','b','tot'].forEach(f => localStorage.removeItem('ts_'+f+id));
+            });
+            tsRows = [];
+
+            // 2. RECONSTRUCT FROM CSV
+            for(let i=1; i<lines.length; i++) {
+                const cols = lines[i].split(',').map(c => c.replace(/"/g, ''));
+                const id = i; 
+                createTSRow(id); 
+                ['p','d','n','t','v','ti','to','b','tot'].forEach((f, idx) => {
+                   const el = document.getElementById('ts'+f+id);
+                   if(el) el.value = cols[idx] || "";
+                });
+            }
+
+            // 3. AUTO-SYNC & SAVE
+            updateTSSelectors(); 
+            saveTSData();        
+            runTSSummary();      
+            alert("Mirror Update Complete: System now matches your CSV exactly.");
+        }; 
+        r.readAsText(e.target.files[0]);
+    }
+
+    function pushToPayroll() {
+        const vList = (document.getElementById('optVar').value || defaultVars).split(',').map(s=>s.trim()).filter(s=>s);
+        let sum = {};
+        tsRows.forEach(id => {
+            const n = document.getElementById(`tsn${id}`).value, v = document.getElementById(`tsv${id}`).value, h = parseFloat(document.getElementById(`tstot${id}`).value) || 0;
+            if(!sum[n]) { sum[n] = {}; vList.forEach(x => sum[n][x] = 0); }
+            if(sum[n].hasOwnProperty(v)) sum[n][v] += h;
+        });
+        const target = prompt("Push hours for whom?", Object.keys(sum)[0]);
+        if(target && sum[target]) {
+            showTab({currentTarget: document.querySelectorAll('.nav-btn')[1]}, 'p_view');
+            document.getElementById('pName').value = target;
+            document.getElementById('hReg').value = sum[target]["Regular"] || 0;
+            document.getElementById('hOt').value = sum[target]["Overtime"] || 0;
+            document.getElementById('hRd').value = sum[target]["Rest Day"] || 0;
+            document.getElementById('hSh').value = sum[target]["Special Holiday"] || 0;
+            document.getElementById('hLh').value = sum[target]["Legal Holiday"] || 0;
+        }
+    }
+    function download(c, n, t) { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([c], {type:t})); a.download = n; a.click(); }
+    function clearPForm() { 
+        ['hReg','hOt','hRd','hSh','hLh','pAdj','pAdv','pNotes'].forEach(id => { if(document.getElementById(id)) document.getElementById(id).value = ''; });
+        for(let i=1; i<=10; i++) { if(document.getElementById(`catQ${i}`)) document.getElementById(`catQ${i}`).value = ''; if(document.getElementById(`catR${i}`)) document.getElementById(`catR${i}`).value = ''; if(document.getElementById(`catM${i}`)) document.getElementById(`catM${i}`).value = ''; }
+        for(let i=1; i<=10; i++) { if(document.getElementById(`dCatQ${i}`)) document.getElementById(`dCatQ${i}`).value = ''; if(document.getElementById(`dCatR${i}`)) document.getElementById(`dCatR${i}`).value = ''; if(document.getElementById(`dCatM${i}`)) document.getElementById(`dCatM${i}`).value = ''; }
+    }
+    function clearPLedger() { if(confirm("Clear ledger?")) { pRecords = []; localStorage.removeItem('p_records'); renderPLedger(); } }
+    function delP(i) { pRecords.splice(i, 1); localStorage.setItem('p_records', JSON.stringify(pRecords)); renderPLedger(); }
+
+    window.onload = () => {
+        ['optPeriod','optName','optTask','optVar'].forEach(id => {
+            document.getElementById(id).value = localStorage.getItem('ts_'+id) || (id==='optVar'?defaultVars:"");
+        });
+        const ids = JSON.parse(localStorage.getItem('ts_activeRows'));
+        if(ids && ids.length > 0) {
+            ids.forEach(id => { 
+                createTSRow(id); 
+                ['p','d','n','t','v','ti','to','b','tot'].forEach(f => {
+                    const val = localStorage.getItem('ts_'+f+id);
+                    if(val) document.getElementById('ts'+f+id).value = val;
+                }); 
+            });
+        } else { addRow(); }
+        updateTSSelectors();
+        document.getElementById('pEmpList').value = localStorage.getItem('p_emps') || "";
+        document.getElementById('pRateList').value = localStorage.getItem('p_rates') || "";
+        const savedP = localStorage.getItem('p_records'); 
+        if(savedP) { pRecords = JSON.parse(savedP); renderPLedger(); }
+        updatePDropdowns();
+    };
+</script>
+</body>
+</html>
