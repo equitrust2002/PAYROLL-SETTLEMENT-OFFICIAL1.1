@@ -292,7 +292,8 @@
         const hR = parseFloat(document.getElementById('hReg').value)||0, hO = parseFloat(document.getElementById('hOt').value)||0;
         const hRD = parseFloat(document.getElementById('hRd').value)||0, hS = parseFloat(document.getElementById('hSh').value)||0, hL = parseFloat(document.getElementById('hLh').value)||0;
         
-        const hourly = (hR * rate) + (hO * rate * 1.25) + (hRD * rate * 1.30) + (hS * rate * 1.30) + (hL * rate * 2.00);
+        const basicPay = hR * rate;
+        const hourly = basicPay + (hO * rate * 1.25) + (hRD * rate * 1.30) + (hS * rate * 1.30) + (hL * rate * 2.00);
         
         let logisticsData = [];
         let logTotal = 0;
@@ -327,12 +328,18 @@
         
         let eeS=0, erS=0, eePH=0, erPH=0, eePI=0, erPI=0, a13=0;
         if(type === 'regular') {
-            const msc = Math.min(Math.max(gross, 5000), 35000);
-            eeS = msc * 0.05; erS = msc * 0.10;
-            const phB = Math.min(Math.max(gross, 10000), 100000);
-            eePH = (phB * 0.05) * 0.5; erPH = eePH;
-            const piB = Math.min(gross, 10000);
-            eePI = piB * 0.02; erPI = eePI;
+            // Updated Contribution Base Calculations - Computed Strictly from Regular / Basic Pay
+            eeS = basicPay * 0.05; 
+            erS = basicPay * 0.10;
+            
+            // PhilHealth: 2026 Premium Share (2.5% Employee / 2.5% Employer Share) matching the basic pay base
+            eePH = basicPay * 0.025; 
+            erPH = eePH;
+            
+            // Pag-IBIG: Fixed matching distribution capped proportionally relative to base rules
+            eePI = basicPay * 0.02; 
+            erPI = eePI;
+            
             a13 = gross / 12;
         }
         const adv = parseFloat(document.getElementById('pAdv').value)||0;
@@ -366,7 +373,6 @@
         const isPiece = r.type === 'piece';
         const win = window.open('', '_blank');
         
-        // Itemized Logistics with Notes
         let logisticsHtml = r.logistics.map(l => `
             <tr>
                 <td><b>Logistics:</b> ${l.name}<br>
@@ -375,7 +381,6 @@
                 <td align="right" valign="top">₱${l.subtotal.toFixed(2)}</td>
             </tr>`).join('');
 
-        // Itemized Deductions with Notes
         let dedHtml = r.extraDeductions.map(d => `
             <tr>
                 <td><b>Ded:</b> ${d.name}<br>
@@ -583,20 +588,17 @@
         download(csv, "Ullswater_Timesheets.csv", "text/csv");
     }
 
-    // MIRROR-UPDATE LOGIC
     function loadTSCSV(e) {
         const r = new FileReader(); 
         r.onload = (ev) => {
             const lines = ev.target.result.split('\n').filter(l => l.trim() !== '');
             
-            // 1. CLEAR CURRENT STATE
             document.getElementById('tsTableBody').innerHTML = ""; 
             tsRows.forEach(id => {
                 ['p','d','n','t','v','ti','to','b','tot'].forEach(f => localStorage.removeItem('ts_'+f+id));
             });
             tsRows = [];
 
-            // 2. RECONSTRUCT FROM CSV
             for(let i=1; i<lines.length; i++) {
                 const cols = lines[i].split(',').map(c => c.replace(/"/g, ''));
                 const id = i; 
@@ -607,7 +609,6 @@
                 });
             }
 
-            // 3. AUTO-SYNC & SAVE
             updateTSSelectors(); 
             saveTSData();        
             runTSSummary();      
